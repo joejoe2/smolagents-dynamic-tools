@@ -1,0 +1,10 @@
+ruff
+smolagents
+litellm
+langchain
+langchain-community
+langchain-ollama
+qdrant-client
+gradio
+mcpadapt
+matplotlib

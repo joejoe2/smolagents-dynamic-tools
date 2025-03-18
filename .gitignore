@@ -1,0 +1,6 @@
+.venv
+.idea
+.ruff_cache
+__pycache__
+plugins/__pycache__
+.env
