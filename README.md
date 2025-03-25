@@ -10,7 +10,7 @@
 
 ## Dynamic Tools Support
 
-The smolagents does not work when reset memory flag is False, especially for tools removing (see [#881](https://github.com/huggingface/smolagents/issues/881)).
+The smolagents does not work well when reset memory flag is False, especially for tools removing (see [#881](https://github.com/huggingface/smolagents/issues/881)).
 But we found a way to do that via updating available tools in each user prompt.
 You can add/update/delete any `.py` files under `./plugins` directory without restarting the app, just 
 click the `reload tools` button on UI.
