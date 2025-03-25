@@ -8,6 +8,13 @@
 ## Lint
 `ruff format .`
 
+## Preview
+
+- agent with image input
+    ![image](agent.png)
+- dynamic tools setting
+    ![image](tools.png)
+
 ## Dynamic Tools Support
 
 The smolagents does not work well when reset memory flag is False, especially for tools removing (see [#881](https://github.com/huggingface/smolagents/issues/881)).
