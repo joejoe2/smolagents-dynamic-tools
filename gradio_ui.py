@@ -104,12 +104,20 @@ def stream_to_gradio(
 
 class MyGradioUI:
     def __init__(
-        self, api_base: str, api_key: str, model: str, authorized_imports: list[str]
+        self,
+        api_base: str,
+        api_key: str,
+        model: str,
+        authorized_imports: list[str],
+        session_ttl: int = 3600,
+        session_capacity: int = 10000,
     ):
         self.api_base: str = api_base
         self.api_key: str = api_key
         self.model: str = model
         self.authorized_imports: list[str] = authorized_imports
+        self.session_ttl: int = session_ttl
+        self.session_capacity: int = session_capacity
 
     def init_session(self, session):
         model = OpenAIServerModel(
@@ -124,8 +132,10 @@ class MyGradioUI:
         )
         session["available_tools"] = load_tools()
         session["lock"] = threading.Lock()
-        return gr.Dropdown(choices=list(session["available_tools"].keys())), gr.Button(
-            interactive=True
+        return (
+            gr.Dropdown(choices=list(session["available_tools"].keys())),
+            gr.Button(interactive=True),
+            session,
         )
 
     def update_selected_tools(self, options: list[str], session):
@@ -293,26 +303,12 @@ class MyGradioUI:
             )
             yield messages
 
-    def log_user_message(self, text_input, file_uploads_log):
-        return (
-            text_input
-            + (
-                f"\nYou have been provided with these files, which might be helpful or not: {file_uploads_log}"
-                if len(file_uploads_log) > 0
-                else ""
-            ),
-            "",
-            gr.Button(interactive=False),
-        )
-
     def launch(self, **kwargs):
         with gr.Blocks(
             theme="ocean", fill_height=True, css="footer{display:none !important}"
         ) as demo:
             # Add session state to store session-specific data
-            session_state = gr.State({})
-            stored_messages = gr.State([])
-            file_uploads_log = gr.State([])
+            session_state = gr.State({}, time_to_live=self.session_ttl)
 
             with gr.Tab("Agent"):
                 # main chat interface
@@ -321,7 +317,7 @@ class MyGradioUI:
                     type="messages",
                     avatar_images=(
                         None,
-                        "https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/smolagents/mascot_smol.png",
+                        None,
                     ),
                     resizeable=True,
                 )
@@ -335,6 +331,7 @@ class MyGradioUI:
                         container=False,
                         placeholder="Enter your prompt here.",
                     )
+                    buffer_input = gr.Textbox(interactive=False, visible=False)
                     with gr.Column(scale=1, min_width=20):
                         # submit btn
                         submit_btn = gr.Button(
@@ -366,16 +363,20 @@ class MyGradioUI:
 
             # Set up event handlers
             text_input.submit(
-                self.log_user_message,
-                [text_input, file_uploads_log],
-                [stored_messages, text_input, submit_btn],
+                lambda x: (
+                    x,
+                    gr.Textbox(value="", interactive=False),
+                    gr.Button(interactive=False),
+                ),
+                [text_input],
+                [buffer_input, text_input, submit_btn],
             ).then(
                 self.interact_with_agent,
-                [stored_messages, chatbot, session_state],
+                [buffer_input, chatbot, session_state],
                 [chatbot],
             ).then(
                 lambda: (
-                    gr.Textbox(interactive=True, placeholder="Enter your prompt here."),
+                    gr.Textbox(interactive=True),
                     gr.Button(interactive=True),
                 ),
                 None,
@@ -384,23 +385,26 @@ class MyGradioUI:
             image_input.change(self.upload_image, inputs=[image_input, session_state])
 
             submit_btn.click(
-                self.log_user_message,
-                [text_input, file_uploads_log],
-                [stored_messages, text_input, submit_btn],
+                lambda x: (
+                    x,
+                    gr.Textbox(value="", interactive=False),
+                    gr.Button(interactive=False),
+                ),
+                [text_input],
+                [buffer_input, text_input, submit_btn],
             ).then(
                 self.interact_with_agent,
-                [stored_messages, chatbot, session_state],
+                [buffer_input, chatbot, session_state],
                 [chatbot],
             ).then(
                 lambda: (
-                    gr.Textbox(interactive=True, placeholder="Enter your prompt here."),
+                    gr.Textbox(interactive=True),
                     gr.Button(interactive=True),
                 ),
                 None,
                 [text_input, submit_btn],
             )
 
-            # events
             tool_selections.change(
                 fn=self.update_selected_tools,
                 inputs=[tool_selections, session_state],
@@ -422,11 +426,11 @@ class MyGradioUI:
                 outputs=[tool_selections, tool_kwargs_selections],
             )
 
-            # init session agent and tools
+            # init session agent and tools, only set session_state as output here for auto timeout
             demo.load(
                 self.init_session,
                 inputs=[session_state],
-                outputs=[tool_selections, submit_btn],
+                outputs=[tool_selections, submit_btn, session_state],
             )
 
-        demo.launch(debug=True, **kwargs)
+        demo.launch(debug=True, state_session_capacity=self.session_capacity, **kwargs)
