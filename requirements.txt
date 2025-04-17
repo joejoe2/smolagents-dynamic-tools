@@ -4,7 +4,9 @@ litellm
 langchain
 langchain-community
 langchain-ollama
+langchain-openai
 qdrant-client
 gradio
+gradio_modal
 mcpadapt
 matplotlib

@@ -1,10 +1,10 @@
 import json
 import threading
+import time
 from typing import Optional
-
+from gradio_modal import Modal
 import gradio as gr
 from PIL.Image import Image
-from requests import session
 from smolagents import (
     # stream_to_gradio,
     populate_template,
@@ -19,6 +19,8 @@ from smolagents import (
 )
 from smolagents.gradio_ui import pull_messages_from_step
 
+import user_input_tool
+from user_input_tool import UserInputTool
 from utils import load_tools
 
 update_tool_prompt_prefix = """
@@ -152,7 +154,7 @@ class MyGradioUI:
                     try:
                         session["agent"].tools[tool_cls.name] = tool_cls()
                     except Exception as e:
-                        raise Exception("Cannot create {} with {}".format(tool_cls, e))
+                        gr.Warning("Cannot create {} with {}".format(tool_cls, e))
             print("udpate tools: {}".format(session["agent"].tools))
             tools = list(session["agent"].tools.keys())
             tools.remove("final_answer")
@@ -178,7 +180,7 @@ class MyGradioUI:
                     try:
                         session["agent"].tools[tool_cls.name] = tool_cls()
                     except Exception as e:
-                        raise Exception("Cannot create {} with {}".format(tool_cls, e))
+                        gr.Warning("Cannot create {} with {}".format(tool_cls, e))
             print("reload tools: {}".format(session["agent"].tools))
             # rerun updated options
             tools = list(session["agent"].tools.keys())
@@ -219,7 +221,7 @@ class MyGradioUI:
                             ),
                         )
                     except Exception as e:
-                        raise Exception(
+                        raise gr.Warning(
                             "Cannot create {} with {}, {}".format(
                                 tool_cls, kwargs_str, e
                             )
@@ -258,9 +260,10 @@ class MyGradioUI:
                 session["image_input"] = image
 
     def interact_with_agent(self, prompt, messages, session_state):
+        if not isinstance(prompt, str) or len(prompt.strip()) == 0:
+            gr.Warning("Cannot interact with empty prompt !")
+            return messages
         try:
-            if not isinstance(prompt, str) or len(prompt.strip()) == 0:
-                raise ValueError("Cannot interact with empty prompt !")
             with session_state["lock"]:
                 # save tokens
                 clean_memory_to_save_tokens(session_state["agent"])
@@ -297,11 +300,8 @@ class MyGradioUI:
 
                 yield messages
         except Exception as e:
-            print(f"Error in interaction: {str(e.with_traceback())}")
-            messages.append(
-                gr.ChatMessage(role="assistant", content=f"Error: {str(e)}")
-            )
             yield messages
+            raise gr.Error(f"Error: {str(e)}")
 
     def launch(self, **kwargs):
         with gr.Blocks(
@@ -431,6 +431,63 @@ class MyGradioUI:
                 self.init_session,
                 inputs=[session_state],
                 outputs=[tool_selections, submit_btn, session_state],
+            )
+
+            # user input
+            with Modal(visible=False, allow_user_close=False) as user_input_modal:
+                question = gr.Markdown("")
+                user_input = gr.Textbox("", lines=2, label="Type your answer:")
+                submit_user_input = gr.Button("submit")
+
+            def check_agent_question(s):
+                try:
+                    if "agent" in s:
+                        if "user_input" in s["agent"].tools:
+                            user_input_tool = s["agent"].tools["user_input"]
+                            if isinstance(user_input_tool, UserInputTool):
+                                if user_input_tool.is_waiting:
+                                    return user_input_tool.question
+                except:
+                    pass
+                return ""
+
+            agent_question = gr.Textbox(
+                check_agent_question,
+                every=5,
+                inputs=[session_state],
+                visible=False,
+                interactive=False,
+            )
+
+            def ask_user(question):
+                if question:
+                    return Modal(visible=True), gr.Markdown(question)
+                else:
+                    return Modal(visible=False), gr.Markdown("")
+
+            agent_question.change(
+                ask_user, inputs=[agent_question], outputs=[user_input_modal, question]
+            )
+
+            def answer_agent_question(s, content):
+                try:
+                    if "agent" in s:
+                        if "user_input" in s["agent"].tools:
+                            user_input_tool = s["agent"].tools["user_input"]
+                            if isinstance(user_input_tool, UserInputTool):
+                                if user_input_tool.is_waiting:
+                                    user_input_tool.user_input = content
+                                    user_input_tool.question = ""
+                                    user_input_tool.is_waiting = False
+                except:
+                    pass
+
+            submit_user_input.click(
+                answer_agent_question,
+                inputs=[session_state, user_input],
+            ).then(
+                lambda: (Modal(visible=False), "", ""),
+                outputs=[user_input_modal, question, user_input],
             )
 
         demo.launch(debug=True, state_session_capacity=self.session_capacity, **kwargs)

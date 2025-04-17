@@ -1,13 +1,16 @@
 import ast
+import glob
 import importlib.util
+import os
 import threading
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Iterable
-import glob
-from smolagents import Tool, DuckDuckGoSearchTool, UserInputTool
-import time
-import os
-from concurrent.futures import ThreadPoolExecutor, as_completed
+
+from smolagents import Tool, DuckDuckGoSearchTool
+
+from user_input_tool import UserInputTool
 
 
 def verify_plugin_file(file_path):
@@ -167,7 +170,10 @@ def load_plugin_tools(plugin: str):
 
 
 def load_tools():
-    available_tools: dict[str, Tool] = {DuckDuckGoSearchTool.name: DuckDuckGoSearchTool}
+    available_tools: dict[str, Tool] = {
+        DuckDuckGoSearchTool.name: DuckDuckGoSearchTool,
+        UserInputTool.name: UserInputTool,
+    }
     plugin_files = load_plugin_files()
 
     with ThreadPoolExecutor(max_workers=3) as executor:

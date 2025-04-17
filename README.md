@@ -14,6 +14,8 @@
     ![image](agent.png)
 - dynamic tools setting
     ![image](tools.png)
+- agent ask for user input
+    ![video](user_input_demo.gif)
 
 ## Dynamic Tools Support
 
