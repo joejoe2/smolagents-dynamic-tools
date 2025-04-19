@@ -8,7 +8,7 @@ api_key = os.getenv("openai_api_key", "xxxxx")
 api_base = os.getenv("openai_api_base", "https://openrouter.ai/api/v1")
 model = os.getenv("model_id", "google/gemini-2.0-flash-exp:free")
 authorized_imports = os.getenv(
-    "authorized_imports", "matplotlib,matplotlib.pyplot,PIL,io,numpy,base64"
+    "authorized_imports", "matplotlib.*,PIL,io,numpy,base64,requests,json"
 ).split(sep=",")
 session_ttl = os.getenv("session_ttl", None)
 session_capacity = int(os.getenv("session_capacity", 10000))

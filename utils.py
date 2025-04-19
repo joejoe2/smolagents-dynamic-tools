@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Iterable
 
-from smolagents import Tool, DuckDuckGoSearchTool
+from smolagents import Tool, DuckDuckGoSearchTool, VisitWebpageTool
 
 from user_input_tool import UserInputTool
 
@@ -173,6 +173,7 @@ def load_tools():
     available_tools: dict[str, Tool] = {
         DuckDuckGoSearchTool.name: DuckDuckGoSearchTool,
         UserInputTool.name: UserInputTool,
+        VisitWebpageTool.name: VisitWebpageTool,
     }
     plugin_files = load_plugin_files()
 

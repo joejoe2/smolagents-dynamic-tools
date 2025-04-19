@@ -1,107 +1,38 @@
 import json
 import threading
-import time
-from typing import Optional
-from gradio_modal import Modal
+
 import gradio as gr
 from PIL.Image import Image
+from gradio_modal import Modal
 from smolagents import (
-    # stream_to_gradio,
+    stream_to_gradio,
     populate_template,
     OpenAIServerModel,
     CodeAgent,
-    ActionStep,
     TaskStep,
-    handle_agent_output_types,
-    AgentText,
-    AgentImage,
-    AgentAudio,
+    InferenceClientModel,
 )
-from smolagents.gradio_ui import pull_messages_from_step
 
-import user_input_tool
+from prompt import (
+    UPDATE_TOOL_PROMPT_PREFIX,
+    UPDATE_TOOL_PROMPT_TEMPLATE,
+    TASK_PRE_PROMPT,
+)
 from user_input_tool import UserInputTool
 from utils import load_tools
-
-update_tool_prompt_prefix = """
-Forget all previous tools. You are now working with a new set of tools, and you must only focus on these tools to assist with the task at hand.
-Do **not** reference any previous tools, and only consider the current tools provided below.
-Here are the tools currently available:"""
-update_tool_prompt_template = (
-    update_tool_prompt_prefix
-    + """
-  {%- for tool in tools.values() %}
-  - {{ tool.name }}: {{ tool.description }}
-      Takes inputs: {{tool.inputs}}
-      Returns an output of type: {{tool.output_type}}
-  {%- endfor %}
-"""
-)
 
 
 def clean_memory_to_save_tokens(agent: CodeAgent):
     # modify memory
     for previous_memory_step in agent.memory.steps:
         if isinstance(previous_memory_step, TaskStep):
-            # remove update_tool_prompt to save tokens
-            pos = previous_memory_step.task.rfind(update_tool_prompt_prefix)
+            # remove TASK_PRE_PROMPT to save tokens
+            cleaned = previous_memory_step.task.replace(TASK_PRE_PROMPT, "")
+            # remove UPDATE_TOOL_PROMPT to save tokens
+            pos = cleaned.rfind(UPDATE_TOOL_PROMPT_PREFIX)
             if pos != -1:
-                previous_memory_step.task = previous_memory_step.task[:pos].strip()
-
-
-def stream_to_gradio(
-    agent: CodeAgent,
-    task: str,
-    reset_agent_memory: bool = False,
-    images: list[Image] = None,
-    additional_args: Optional[dict] = None,
-):
-    """Runs an agent with the given task and streams the messages from the agent as gradio ChatMessages."""
-    total_input_tokens = 0
-    total_output_tokens = 0
-
-    for step_log in agent.run(
-        task,
-        stream=True,
-        reset=reset_agent_memory,
-        images=images,
-        additional_args=additional_args,
-    ):
-        # Track tokens if model provides them
-        if getattr(agent.model, "last_input_token_count", None) is not None:
-            total_input_tokens += agent.model.last_input_token_count
-            total_output_tokens += agent.model.last_output_token_count
-            if isinstance(step_log, ActionStep):
-                step_log.input_token_count = agent.model.last_input_token_count
-                step_log.output_token_count = agent.model.last_output_token_count
-
-        for message in pull_messages_from_step(
-            step_log,
-        ):
-            yield message
-
-    final_answer = step_log  # Last log is the run's final_answer
-    final_answer = handle_agent_output_types(final_answer)
-
-    if isinstance(final_answer, AgentText):
-        yield gr.ChatMessage(
-            role="assistant",
-            content=f"**Final answer:**\n{final_answer.to_string()}\n",
-        )
-    elif isinstance(final_answer, AgentImage):
-        yield gr.ChatMessage(
-            role="assistant",
-            content={"path": final_answer.to_string(), "mime_type": "image/png"},
-        )
-    elif isinstance(final_answer, AgentAudio):
-        yield gr.ChatMessage(
-            role="assistant",
-            content={"path": final_answer.to_string(), "mime_type": "audio/wav"},
-        )
-    else:
-        yield gr.ChatMessage(
-            role="assistant", content=f"**Final answer:** {str(final_answer)}"
-        )
+                cleaned = cleaned[:pos]
+            previous_memory_step.task = cleaned.strip()
 
 
 class MyGradioUI:
@@ -272,12 +203,18 @@ class MyGradioUI:
                 messages.append(gr.ChatMessage(role="user", content=prompt))
                 yield messages
 
+                # add problem tag
+                prompt = "Problem: " + prompt
+
                 # fix agent tools update problem
                 update_tool_prompt = populate_template(
-                    update_tool_prompt_template,
+                    UPDATE_TOOL_PROMPT_TEMPLATE,
                     variables={"tools": session_state["agent"].tools},
                 )
                 prompt = prompt + "\n\n" + update_tool_prompt
+
+                # add TASK_PRE_PROMPT
+                prompt = TASK_PRE_PROMPT + "\n" + prompt
 
                 # get image input
                 images: list[Image] = (
@@ -293,7 +230,7 @@ class MyGradioUI:
                     session_state["agent"],
                     task=prompt,
                     reset_agent_memory=False,
-                    images=images,
+                    task_images=images,
                 ):
                     messages.append(msg)
                     yield messages
@@ -320,6 +257,7 @@ class MyGradioUI:
                         None,
                     ),
                     resizeable=True,
+                    sanitize_html=False,
                 )
 
                 with gr.Row():
