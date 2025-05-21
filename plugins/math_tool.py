@@ -1,5 +1,6 @@
-from smolagents import Tool
 from decimal import Decimal
+
+from smolagents import Tool
 
 
 class SumNumTool(Tool):

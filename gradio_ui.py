@@ -10,7 +10,6 @@ from smolagents import (
     OpenAIServerModel,
     CodeAgent,
     TaskStep,
-    InferenceClientModel,
 )
 
 from prompt import (
