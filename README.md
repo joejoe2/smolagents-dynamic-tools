@@ -38,13 +38,16 @@ class NewTool(Tool):
         }
     }
     output_type = "string"
-    # add default_kwargs if you want to update kwargs from ui
+    
+    # add default_kwargs if you want to update kwargs from ui !
     default_kwargs = {"var1": "test", "var2": 5}
     
     # can only have **kwargs
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        # must have self.kwargs if default_kwargs is present !
         self.kwargs = {**self.default_kwargs, **kwargs}
+        
         self.collection_name = (
             self.default_kwargs["var1"]
             if kwargs.get("var1") is None

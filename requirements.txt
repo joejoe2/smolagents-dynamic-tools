@@ -1,5 +1,5 @@
 ruff
-smolagents==1.16.1
+smolagents==1.17.0
 litellm
 langchain
 langchain-community

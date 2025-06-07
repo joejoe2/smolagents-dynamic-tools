@@ -61,6 +61,7 @@ class MyGradioUI:
             model=model,
             additional_authorized_imports=self.authorized_imports,
             verbosity_level=2,
+            stream_outputs=True,
         )
         session["available_tools"] = load_tools()
         session["lock"] = threading.Lock()
@@ -199,7 +200,11 @@ class MyGradioUI:
                 clean_memory_to_save_tokens(session_state["agent"])
 
                 # display messages to user
-                messages.append(gr.ChatMessage(role="user", content=prompt))
+                messages.append(
+                    gr.ChatMessage(
+                        role="user", content=prompt, metadata={"status": "done"}
+                    )
+                )
                 yield messages
 
                 # add problem tag
@@ -231,7 +236,23 @@ class MyGradioUI:
                     reset_agent_memory=False,
                     task_images=images,
                 ):
-                    messages.append(msg)
+                    if isinstance(msg, gr.ChatMessage):
+                        messages[-1].metadata["status"] = "done"
+                        messages.append(msg)
+                    elif isinstance(msg, str):  # Then it's only a completion delta
+                        msg = msg.replace("<", r"\<").replace(
+                            ">", r"\>"
+                        )  # HTML tags seem to break Gradio Chatbot
+                        if messages[-1].metadata["status"] == "pending":
+                            messages[-1].content = msg
+                        else:
+                            messages.append(
+                                gr.ChatMessage(
+                                    role="assistant",
+                                    content=msg,
+                                    metadata={"status": "pending"},
+                                )
+                            )
                     yield messages
 
                 yield messages
